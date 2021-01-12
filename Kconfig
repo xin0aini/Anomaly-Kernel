@@ -108,3 +108,7 @@ source "lib/Kconfig"
 source "lib/Kconfig.debug"
 
 source "techpack/Kconfig"
+
+source "Documentation/Kconfig"
+
+source "kernel/sched/walt/Kconfig"
