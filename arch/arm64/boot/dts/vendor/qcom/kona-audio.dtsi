@@ -13,7 +13,7 @@
 		      <0x039f0010 0x4>;
 		reg-names = "avtimer_lsb_addr", "avtimer_msb_addr";
 		qcom,clk-div = <192>;
-		qcom,clk-mult = <10>;
+		qcom,clk-mult = <25>;
 	};
 };
 
@@ -75,7 +75,12 @@
 		qcom,tdm-audio-intf = <1>;
 		qcom,wcn-bt = <0>;
 		qcom,ext-disp-audio-rx = <0>;
-		qcom,afe-rxtx-lb = <0>;
+
+		/* #ifdef OPLUS_FEATURE_AEC */
+		qcom,afe-rxtx-lb = <1>;
+		/* #else */
+		/* qcom,afe-rxtx-lb = <0>; */
+		/* #endif OPLUS_FEATURE_AEC */
 
 		clock-names = "lpass_audio_hw_vote";
 		clocks = <&lpass_audio_hw_vote 0>;
@@ -174,8 +179,53 @@
 
 &qupv3_se15_i2c {
 	status = "ok";
-	fsa4480: fsa4480@43 {
+	/* #ifdef OPLUS_ARCH_EXTENDS */
+	fsa4480: fsa4480@42 {
 		compatible = "qcom,fsa4480-i2c";
-		reg = <0x43>;
+		reg = <0x42>;
+		//pinctrl-names = "default";
+		//pinctrl-0 = <&fsa_hs_det>;
+		//fsa4480,hs-det-gpio = <&tlmm 11 0x00>;
 	};
+	/* #endif OPLUS_ARCH_EXTENDS */
+	/* #ifdef OPLUS_ARCH_EXTENDS */
+	tfa98xx@34 {
+                compatible = "nxp,tfa98xx";
+                reg = <0x34>;
+                tfa9874_vdd-supply = <&pm8150_s4>;
+                reset-gpio = <&tlmm 91 0x00>;
+                tfa_min_range = <5000>;
+                tfa_max_range = <8000>;
+                tfa_channel = <0>;
+                status = "ok";
+        };
+	tfa98xx@35 {
+                compatible = "nxp,tfa98xx";
+                reg = <0x35>;
+                tfa9874_vdd-supply = <&pm8150_s4>;
+                reset-gpio = <&tlmm 99 0x00>;
+                tfa_min_range = <5000>;
+                tfa_max_range = <8000>;
+                tfa_channel = <1>;
+                status = "ok";
+        };
+	/* #endif OPLUS_ARCH_EXTENDS */
 };
+
+/* #ifdef OPLUS_ARCH_EXTENDS */
+/*&tlmm {
+	fsa_hs_det: fsa_hs_det  {
+		mux {
+			pins = "gpio11";
+			function = "gpio";
+		};
+
+		config {
+			pins = "gpio11";
+			drive-strength = <2>;
+			bias-disable;
+			output-high;
+		};
+	};
+};*/
+/* #endif OPLUS_ARCH_EXTENDS */
