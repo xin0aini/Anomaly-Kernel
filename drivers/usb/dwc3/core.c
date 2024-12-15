@@ -505,6 +505,7 @@ void dwc3_event_buffers_cleanup(struct dwc3 *dwc)
 	dwc3_writel(dwc->regs, DWC3_GEVNTSIZ(0), DWC3_GEVNTSIZ_INTMASK
 			| DWC3_GEVNTSIZ_SIZE(0));
 
+	
 	/* Clear any stale event */
 	reg = dwc3_readl(dwc->regs, DWC3_GEVNTCOUNT(0));
 	dwc3_writel(dwc->regs, DWC3_GEVNTCOUNT(0), reg);
@@ -2079,7 +2080,6 @@ static void dwc3_complete(struct device *dev)
 
 static const struct dev_pm_ops dwc3_dev_pm_ops = {
 	SET_SYSTEM_SLEEP_PM_OPS(dwc3_suspend, dwc3_resume)
-	.complete = dwc3_complete,
 
 	/*
 	 * Runtime suspend halts the controller on disconnection. It relies on
