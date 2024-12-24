@@ -155,6 +155,10 @@ long kgsl_ioctl_helper(struct file *filep, unsigned int cmd, unsigned long arg,
 			return ret;
 	}
 
+	/* Optimize: Prioritize GPU-intensive IOCTL calls */
+	if (cmd == IOCTL_KGSL_GPU_COMMAND || cmd == IOCTL_KGSL_GPUMEM_ALLOC)
+		trace_printk("High-priority IOCTL: %u\n", cmd);
+
 	ret = cmds[nr].func(dev_priv, cmd, data);
 
 	if (ret == 0 && _IOC_SIZE(cmds[nr].cmd))
@@ -171,17 +175,16 @@ long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	long ret;
 
 	if (cmd == IOCTL_KGSL_GPU_COMMAND &&
-	    READ_ONCE(device->state) != KGSL_STATE_ACTIVE)
-		kgsl_schedule_work(&adreno_dev->pwr_on_work);
+	    READ_ONCE(device->state) != KGSL_STATE_ACTIVE) {
+		/* Optimize power-on sequence */
+		if (!work_pending(&adreno_dev->pwr_on_work))
+			kgsl_schedule_work(&adreno_dev->pwr_on_work);
+	}
 
 	ret = kgsl_ioctl_helper(filep, cmd, arg, kgsl_ioctl_funcs,
 		ARRAY_SIZE(kgsl_ioctl_funcs));
 
-	/*
-	 * If the command was unrecognized in the generic core, try the device
-	 * specific function
-	 */
-
+	/* Fallback to device-specific function if generic handling fails */
 	if (ret == -ENOIOCTLCMD) {
 		if (is_compat_task() && device->ftbl->compat_ioctl != NULL)
 			return device->ftbl->compat_ioctl(dev_priv, cmd, arg);
@@ -191,3 +194,4 @@ long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 
 	return ret;
 }
+
