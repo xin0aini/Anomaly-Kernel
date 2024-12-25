@@ -28,7 +28,7 @@
 #include "adreno_llc.h"
 #include "adreno_trace.h"
 #include "kgsl_trace.h"
-#include "../../devfreq/adreno_bus.h"
+#include "adreno_bus.h"
 
 /* Include the master list of GPU cores that are supported */
 #include "adreno-gpulist.h"
