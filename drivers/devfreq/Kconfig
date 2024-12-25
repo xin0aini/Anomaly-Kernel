@@ -246,6 +246,16 @@ config DEVFREQ_GOV_STATICMAP
 	  Clock notifier based governor for device to DDR Bandwidth voting.
 	  This governor votes for the DDR BW based on the device's clock rate
 	  change.
+	  
+config ADRENO_BUS
+    tristate "Adreno GPU Bus Frequency Control"
+    depends on DRM_ADRENO && DEVFREQ_GOV_SIMPLE_ONDEMAND
+    help
+      Enable support for Adreno GPU bus frequency control. This driver
+      provides functionality to manage and control bus frequencies for
+      Adreno GPUs.
+
+      Say 'M' to build this driver as a module, or 'Y' to link it statically.	  
 
 source "drivers/devfreq/event/Kconfig"
 
