@@ -13,9 +13,11 @@
 #include <linux/msm-bus.h>
 #include <linux/regulator/consumer.h>
 #include <linux/nvmem-consumer.h>
+#include <linux/seq_file.h>
+#include <linux/proc_fs.h>
+#include <linux/sysfs.h>
+#include <linux/kobject.h>
 #include <soc/qcom/scm.h>
-#include <linux/seq_file.h>    // Required for seq_printf, seq_read, seq_lseek
-#include <linux/proc_fs.h>     // Required for proc_create and remove_proc_entry
 
 #include "adreno.h"
 #include "adreno_a3xx.h"
@@ -49,112 +51,87 @@ static struct adreno_bus_freq_status {
     unsigned int bus_min;
     unsigned int bus_max;
 } adreno_bus_freq_status = {
-    .bus_min = 200,  // Default min bus frequency (MHz)
-    .bus_max = 900,  // Default max bus frequency (MHz)
+    .bus_min = 200, // Default min bus frequency (MHz)
+    .bus_max = 900, // Default max bus frequency (MHz)
 };
 
-/* Function to handle setting the bus min frequency */
-static ssize_t set_bus_min_freq(struct file *file, const char __user *buf,
-                                 size_t count, loff_t *pos)
+/* SysFS attribute for bus_min */
+static ssize_t bus_min_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return scnprintf(buf, PAGE_SIZE, "%u\n", adreno_bus_freq_status.bus_min);
+}
+
+static ssize_t bus_min_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
     unsigned int val;
-    int ret;
-
-    ret = kstrtouint_from_user(buf, count, 10, &val);
-    if (ret || val < 200 || val > 900)  // Validate frequency range
+    if (kstrtouint(buf, 10, &val) || val < 200 || val > 900)
         return -EINVAL;
 
     adreno_bus_freq_status.bus_min = val;
-
-    // Function to actually set the bus frequency in hardware
-    // For example: msm_kgsl_bus_set_min_freq(adreno_bus_freq_status.bus_min);
-
     pr_info("Set bus min frequency to %u MHz\n", adreno_bus_freq_status.bus_min);
-
     return count;
 }
 
-/* Function to handle setting the bus max frequency */
-static ssize_t set_bus_max_freq(struct file *file, const char __user *buf,
-                                 size_t count, loff_t *pos)
+static struct kobj_attribute bus_min_attr = __ATTR(bus_min, 0664, bus_min_show, bus_min_store);
+
+/* SysFS attribute for bus_max */
+static ssize_t bus_max_show(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
+{
+    return scnprintf(buf, PAGE_SIZE, "%u\n", adreno_bus_freq_status.bus_max);
+}
+
+static ssize_t bus_max_store(struct kobject *kobj, struct kobj_attribute *attr, const char *buf, size_t count)
 {
     unsigned int val;
-    int ret;
-
-    ret = kstrtouint_from_user(buf, count, 10, &val);
-    if (ret || val < 200 || val > 900)  // Validate frequency range
+    if (kstrtouint(buf, 10, &val) || val < 200 || val > 900)
         return -EINVAL;
 
     adreno_bus_freq_status.bus_max = val;
-
-    // Function to actually set the bus frequency in hardware
-    // For example: msm_kgsl_bus_set_max_freq(adreno_bus_freq_status.bus_max);
-
     pr_info("Set bus max frequency to %u MHz\n", adreno_bus_freq_status.bus_max);
-
     return count;
 }
 
-/* Function to show the current bus min frequency */
-static int bus_min_freq_show(struct seq_file *m, void *v)
-{
-    seq_printf(m, "%u\n", adreno_bus_freq_status.bus_min);
-    return 0;
-}
+static struct kobj_attribute bus_max_attr = __ATTR(bus_max, 0664, bus_max_show, bus_max_store);
 
-/* Function to show the current bus max frequency */
-static int bus_max_freq_show(struct seq_file *m, void *v)
-{
-    seq_printf(m, "%u\n", adreno_bus_freq_status.bus_max);
-    return 0;
-}
+/* Kobject for sysfs */
+static struct kobject *adreno_kobj;
 
-/* File operations for bus min frequency */
-static int bus_min_freq_open(struct inode *inode, struct file *file)
-{
-    return single_open(file, bus_min_freq_show, NULL);
-}
-
-static const struct file_operations bus_min_freq_proc_ops = {
-    .open    = bus_min_freq_open,
-    .read    = seq_read,
-    .write   = set_bus_min_freq,
-    .llseek  = seq_lseek,
-    .release = single_release,
-};
-
-/* File operations for bus max frequency */
-static int bus_max_freq_open(struct inode *inode, struct file *file)
-{
-    return single_open(file, bus_max_freq_show, NULL);
-}
-
-static const struct file_operations bus_max_freq_proc_ops = {
-    .open    = bus_max_freq_open,
-    .read    = seq_read,
-    .write   = set_bus_max_freq,
-    .llseek  = seq_lseek,
-    .release = single_release,
-};
-
-/* Initialize the bus frequency controls in the existing adreno.c module */
+/* Initialize the bus frequency controls */
 int adreno_freq_init(void)
 {
-    /* Create the /proc entries for bus frequency control */
-    proc_create("adreno_bus_min_freq", 0664, NULL, &bus_min_freq_proc_ops);
-    proc_create("adreno_bus_max_freq", 0664, NULL, &bus_max_freq_proc_ops);
+    int ret;
+
+    adreno_kobj = kobject_create_and_add("adreno_bus", kernel_kobj);
+    if (!adreno_kobj)
+        return -ENOMEM;
+
+    ret = sysfs_create_file(adreno_kobj, &bus_min_attr.attr);
+    if (ret)
+        goto fail_min;
+
+    ret = sysfs_create_file(adreno_kobj, &bus_max_attr.attr);
+    if (ret)
+        goto fail_max;
 
     pr_info("Adreno bus frequency control initialized.\n");
     return 0;
+
+fail_max:
+    sysfs_remove_file(adreno_kobj, &bus_min_attr.attr);
+fail_min:
+    kobject_put(adreno_kobj);
+    return ret;
 }
 
 /* Cleanup the bus frequency controls */
 void adreno_freq_exit(void)
 {
-    /* Clean up /proc entries */
-    remove_proc_entry("adreno_bus_min_freq", NULL);
-    remove_proc_entry("adreno_bus_max_freq", NULL);
-
+    if (adreno_kobj) {
+        sysfs_remove_file(adreno_kobj, &bus_min_attr.attr);
+        sysfs_remove_file(adreno_kobj, &bus_max_attr.attr);
+        kobject_put(adreno_kobj);
+        adreno_kobj = NULL; // Clear pointer after cleanup
+    }
     pr_info("Adreno bus frequency control cleaned up.\n");
 }
 
