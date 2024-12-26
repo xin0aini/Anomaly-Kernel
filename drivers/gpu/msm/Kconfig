@@ -23,12 +23,6 @@ config QCOM_ADRENO_DEFAULT_GOVERNOR
 	default "simple_ondemand"
 	depends on QCOM_KGSL
 	
-config ADRENO_BUS
-    bool "Adreno Bus Frequency Control"
-    default y
-    help
-      Build the Adreno Bus Frequency Control as a separate module.
-	
 
 config QCOM_KGSL_IOMMU
 	bool
