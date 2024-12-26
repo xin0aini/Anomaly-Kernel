@@ -48,8 +48,11 @@ msm_adreno-y += \
 	adreno_sysfs.o \
 	adreno.o \
 	adreno_cp_parser.o \
-	adreno_perfcounter.o \
-	adreno_bus.o  # Add adreno_bus here
+	adreno_perfcounter.o 
+	
+	obj-y += adreno_bus.o
+
+#	adreno_bus.o  # Add adreno_bus here
 
 msm_adreno-$(CONFIG_QCOM_KGSL_IOMMU) += adreno_iommu.o
 msm_adreno-$(CONFIG_DEBUG_FS) += adreno_debugfs.o adreno_profile.o

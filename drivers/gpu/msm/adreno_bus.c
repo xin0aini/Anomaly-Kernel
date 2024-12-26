@@ -9,7 +9,6 @@
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_fdt.h>
-#include <linux/module.h>
 #include <linux/sysfs.h>
 #include <linux/kobject.h>
 #include <linux/device.h> // For device_kobj
@@ -96,19 +95,19 @@ static struct kobj_attribute adreno_bus_attr = __ATTR(adreno_bus, 0664, adreno_b
 static struct kobject *adreno_kobj;
 
 /* Initialize the adreno bus frequency controls */
-int adreno_bus_init(void)
+static int __init adreno_bus_init(void)
 {
     int ret;
 
-    /* Create kobject under the GPU class or kernel kobject */
+    /* Create kobject under the platform bus */
     pr_debug("Creating adreno_bus kobject...\n");
-    adreno_kobj = kobject_create_and_add("adreno_bus", kernel_kobj); // Or adjust to use GPU class
+    adreno_kobj = kobject_create_and_add("adreno_bus", &platform_bus.kobj);
     if (!adreno_kobj) {
         pr_err("Failed to create adreno_kobj\n");
         return -ENOMEM;
     }
 
-    pr_debug("Creating sysfs files for bus_min, bus_max, and adreno_bus...\n");
+    pr_debug("Creating sysfs files for adreno_bus...\n");
 
     ret = sysfs_create_file(adreno_kobj, &adreno_bus_attr.attr);
     if (ret) {
@@ -122,7 +121,7 @@ int adreno_bus_init(void)
 }
 
 /* Cleanup the adreno bus frequency controls */
-void adreno_bus_exit(void)
+static void adreno_bus_exit(void)
 {
     pr_debug("Cleaning up adreno_bus sysfs files...\n");
 
@@ -135,7 +134,7 @@ void adreno_bus_exit(void)
     pr_info("Adreno bus frequency control cleaned up.\n");
 }
 
-MODULE_LICENSE("GPL v2");
-MODULE_DESCRIPTION("Adreno Bus Frequency Control with Levels");
-MODULE_AUTHOR("The_Anomalist");
+/* Register init and exit functions using core kernel mechanisms */
+core_initcall(adreno_bus_init);
+__exitcall(adreno_bus_exit);
 

@@ -24,12 +24,10 @@ config QCOM_ADRENO_DEFAULT_GOVERNOR
 	depends on QCOM_KGSL
 	
 config ADRENO_BUS
-    tristate "Adreno GPU Bus Frequency Control"
-    depends on DRM_ADRENO && DEVFREQ_GOV_SIMPLE_ONDEMAND
+    bool "Adreno Bus Frequency Control"
+    default y
     help
-      Enable support for Adreno GPU bus frequency control. This driver
-      provides functionality to manage and control bus frequencies for
-      Adreno GPUs.
+      Build the Adreno Bus Frequency Control as a separate module.
 	
 
 config QCOM_KGSL_IOMMU
