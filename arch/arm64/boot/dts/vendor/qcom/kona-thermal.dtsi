@@ -1,4 +1,4 @@
-#include <dt-bindings/thermal/thermal.h>
+F#include <dt-bindings/thermal/thermal.h>
 #include <dt-bindings/thermal/qmi_thermal.h>
 
 &cpufreq_hw {
@@ -173,6 +173,22 @@
 		compatible = "qcom,msm-limits-cdsp";
 	};
 };
+
+//#ifdef OPLUS_FEATURE_THERMAL_HORAE
+/{
+	shell_front {
+		compatible = "oplus,shell-temp";
+	};
+
+	shell_frame {
+		compatible = "oplus,shell-temp";
+	};
+
+	shell_back {
+		compatible = "oplus,shell-temp";
+	};
+};
+//#endif
 
 &thermal_zones {
 	aoss0-usr {
@@ -484,12 +500,12 @@
 		trips {
 			active-config0 {
 				temperature = <125000>;
-				hysteresis = <1000>;
+				hysteresis = <1070>;
 				type = "passive";
 			};
 			active-config1 {
 				temperature = <115000>;
-				hysteresis = <1000>;
+				hysteresis = <1070>;
 				type = "passive";
 			};
 		};
@@ -664,12 +680,12 @@
 		trips {
 			active-config0 {
 				temperature = <125000>;
-				hysteresis = <1000>;
+				hysteresis = <1070>;
 				type = "passive";
 			};
 			active-config1 {
 				temperature = <115000>;
-				hysteresis = <1000>;
+				hysteresis = <1070>;
 				type = "passive";
 			};
 		};
@@ -682,7 +698,7 @@
 		wake-capable-sensor;
 		trips {
 			gpu_trip0: gpu-trip0 {
-				temperature = <95000>;
+				temperature = <98000>;
 				hysteresis = <0>;
 				type = "passive";
 			};
