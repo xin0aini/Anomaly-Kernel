@@ -20,7 +20,6 @@
 #include "msm_drv.h"
 #include "msm_fence.h"
 
-
 struct msm_fence_context *
 msm_fence_context_alloc(struct drm_device *dev, const char *name)
 {
@@ -33,6 +32,7 @@ msm_fence_context_alloc(struct drm_device *dev, const char *name)
 	fctx->dev = dev;
 	strscpy(fctx->name, name, sizeof(fctx->name));
 	fctx->context = dma_fence_context_alloc(1);
+	fctx->timeline_value = 0; // Initialize timeline value
 	init_waitqueue_head(&fctx->event);
 	spin_lock_init(&fctx->spinlock);
 
@@ -44,41 +44,41 @@ void msm_fence_context_free(struct msm_fence_context *fctx)
 	kfree(fctx);
 }
 
-static inline bool fence_completed(struct msm_fence_context *fctx, uint32_t fence)
+static inline bool timeline_completed(struct msm_fence_context *fctx, uint32_t timeline)
 {
-	return (int32_t)(fctx->completed_fence - fence) >= 0;
+	return (int32_t)(fctx->timeline_value - timeline) >= 0;
 }
 
 /* legacy path for WAIT_FENCE ioctl: */
-int msm_wait_fence(struct msm_fence_context *fctx, uint32_t fence,
+int msm_wait_timeline(struct msm_fence_context *fctx, uint32_t timeline,
 		ktime_t *timeout, bool interruptible)
 {
 	int ret;
 
-	if (fence > fctx->last_fence) {
-		DRM_ERROR_RATELIMITED("%s: waiting on invalid fence: %u (of %u)\n",
-				fctx->name, fence, fctx->last_fence);
+	if (timeline > fctx->timeline_value) {
+		DRM_ERROR_RATELIMITED("%s: waiting on invalid timeline: %u (current: %u)\n",
+				fctx->name, timeline, fctx->timeline_value);
 		return -EINVAL;
 	}
 
 	if (!timeout) {
 		/* no-wait: */
-		ret = fence_completed(fctx, fence) ? 0 : -EBUSY;
+		ret = timeline_completed(fctx, timeline) ? 0 : -EBUSY;
 	} else {
 		unsigned long remaining_jiffies = timeout_to_jiffies(timeout);
 
 		if (interruptible)
 			ret = wait_event_interruptible_timeout(fctx->event,
-				fence_completed(fctx, fence),
+				timeline_completed(fctx, timeline),
 				remaining_jiffies);
 		else
 			ret = wait_event_timeout(fctx->event,
-				fence_completed(fctx, fence),
+				timeline_completed(fctx, timeline),
 				remaining_jiffies);
 
 		if (ret == 0) {
-			DBG("timeout waiting for fence: %u (completed: %u)",
-					fence, fctx->completed_fence);
+			DBG("timeout waiting for timeline: %u (current: %u)",
+					timeline, fctx->timeline_value);
 			ret = -ETIMEDOUT;
 		} else if (ret != -ERESTARTSYS) {
 			ret = 0;
@@ -89,10 +89,10 @@ int msm_wait_fence(struct msm_fence_context *fctx, uint32_t fence,
 }
 
 /* called from workqueue */
-void msm_update_fence(struct msm_fence_context *fctx, uint32_t fence)
+void msm_update_timeline(struct msm_fence_context *fctx, uint32_t timeline)
 {
 	spin_lock(&fctx->spinlock);
-	fctx->completed_fence = max(fence, fctx->completed_fence);
+	fctx->timeline_value = max(timeline, fctx->timeline_value);
 	spin_unlock(&fctx->spinlock);
 
 	wake_up_all(&fctx->event);
@@ -127,7 +127,7 @@ static bool msm_fence_enable_signaling(struct dma_fence *fence)
 static bool msm_fence_signaled(struct dma_fence *fence)
 {
 	struct msm_fence *f = to_msm_fence(fence);
-	return fence_completed(f->fctx, f->base.seqno);
+	return timeline_completed(f->fctx, f->base.seqno);
 }
 
 static const struct dma_fence_ops msm_fence_ops = {
@@ -155,3 +155,4 @@ msm_fence_alloc(struct msm_fence_context *fctx)
 
 	return &f->base;
 }
+
