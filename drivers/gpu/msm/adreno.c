@@ -13,11 +13,9 @@
 #include <linux/msm-bus.h>
 #include <linux/regulator/consumer.h>
 #include <linux/nvmem-consumer.h>
-#include <linux/seq_file.h>
-#include <linux/proc_fs.h>
-#include <linux/sysfs.h>
-#include <linux/kobject.h>
 #include <soc/qcom/scm.h>
+#include <linux/seq_file.h>    // Required for seq_printf, seq_read, seq_lseek
+#include <linux/proc_fs.h>     // Required for proc_create and remove_proc_entry
 
 #include "adreno.h"
 #include "adreno_a3xx.h"
@@ -28,7 +26,6 @@
 #include "adreno_llc.h"
 #include "adreno_trace.h"
 #include "kgsl_trace.h"
-#include "adreno_bus.h"
 
 /* Include the master list of GPU cores that are supported */
 #include "adreno-gpulist.h"
@@ -46,6 +43,181 @@ static struct devfreq_msm_adreno_tz_data adreno_tz_data = {
     },
     .device_id = KGSL_DEVICE_3D0,  // Device ID for the GPU
 };
+
+/* Define bus frequency control structure */
+static struct adreno_bus_freq_status {
+    unsigned int bus_min;
+    unsigned int bus_max;
+} adreno_bus_freq_status = {
+    .bus_min = 200,  // Default min bus frequency (MHz)
+    .bus_max = 900,  // Default max bus frequency (MHz)
+};
+
+/* Function to handle setting the bus min frequency */
+static ssize_t set_bus_min_freq(struct file *file, const char __user *buf,
+                                 size_t count, loff_t *pos)
+{
+    unsigned int val;
+    int ret;
+
+    ret = kstrtouint_from_user(buf, count, 10, &val);
+    if (ret || val < 200 || val > 900)  // Validate frequency range
+        return -EINVAL;
+
+    adreno_bus_freq_status.bus_min = val;
+
+    // Function to actually set the bus frequency in hardware
+    // For example: msm_kgsl_bus_set_min_freq(adreno_bus_freq_status.bus_min);
+
+    pr_info("Set bus min frequency to %u MHz\n", adreno_bus_freq_status.bus_min);
+
+    return count;
+}
+
+/* Function to handle setting the bus max frequency */
+static ssize_t set_bus_max_freq(struct file *file, const char __user *buf,
+                                 size_t count, loff_t *pos)
+{
+    unsigned int val;
+    int ret;
+
+    ret = kstrtouint_from_user(buf, count, 10, &val);
+    if (ret || val < 200 || val > 900)  // Validate frequency range
+        return -EINVAL;
+
+    adreno_bus_freq_status.bus_max = val;
+
+    // Function to actually set the bus frequency in hardware
+    // For example: msm_kgsl_bus_set_max_freq(adreno_bus_freq_status.bus_max);
+
+    pr_info("Set bus max frequency to %u MHz\n", adreno_bus_freq_status.bus_max);
+
+    return count;
+}
+
+/* Define file operations for the proc entries */
+static const struct file_operations bus_min_fops = {
+    .owner = THIS_MODULE,
+    .write = set_bus_min_freq,
+};
+
+static const struct file_operations bus_max_fops = {
+    .owner = THIS_MODULE,
+    .write = set_bus_max_freq,
+};
+
+/* Create proc entries for reading and writing the bus frequency values */
+static int create_proc_entries(void)
+{
+    struct proc_dir_entry *entry;
+
+    // Create proc entry for bus_min frequency
+    entry = proc_create("adreno_bus_min_freq", 0644, NULL, &bus_min_fops);
+    if (!entry)
+        return -ENOMEM;
+
+    // Create proc entry for bus_max frequency
+    entry = proc_create("adreno_bus_max_freq", 0644, NULL, &bus_max_fops);
+    if (!entry)
+        return -ENOMEM;
+
+    pr_info("Proc entries created for bus frequency settings\n");
+
+    return 0;
+}
+
+/* Cleanup proc entries */
+static void remove_proc_entries(void)
+{
+    remove_proc_entry("adreno_bus_min_freq", NULL);
+    remove_proc_entry("adreno_bus_max_freq", NULL);
+
+    pr_info("Proc entries removed for bus frequency settings\n");
+}
+
+/* Initialize the functionality */
+int adreno_bus_init(void)
+{
+    int ret;
+
+    ret = create_proc_entries();
+    if (ret)
+        pr_err("Failed to create proc entries\n");
+
+    return ret;
+}
+
+/* Cleanup functionality */
+void adreno_bus_exit(void)
+{
+    remove_proc_entries();
+}
+
+
+
+/* Function to show the current bus min frequency */
+static int bus_min_freq_show(struct seq_file *m, void *v)
+{
+    seq_printf(m, "%u\n", adreno_bus_freq_status.bus_min);
+    return 0;
+}
+
+/* Function to show the current bus max frequency */
+static int bus_max_freq_show(struct seq_file *m, void *v)
+{
+    seq_printf(m, "%u\n", adreno_bus_freq_status.bus_max);
+    return 0;
+}
+
+/* File operations for bus min frequency */
+static int bus_min_freq_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, bus_min_freq_show, NULL);
+}
+
+static const struct file_operations bus_min_freq_proc_ops = {
+    .open    = bus_min_freq_open,
+    .read    = seq_read,
+    .write   = set_bus_min_freq,
+    .llseek  = seq_lseek,
+    .release = single_release,
+};
+
+/* File operations for bus max frequency */
+static int bus_max_freq_open(struct inode *inode, struct file *file)
+{
+    return single_open(file, bus_max_freq_show, NULL);
+}
+
+static const struct file_operations bus_max_freq_proc_ops = {
+    .open    = bus_max_freq_open,
+    .read    = seq_read,
+    .write   = set_bus_max_freq,
+    .llseek  = seq_lseek,
+    .release = single_release,
+};
+
+/* Initialize the bus frequency controls in the existing adreno.c module */
+int adreno_freq_init(void)
+{
+    /* Create the /proc entries for bus frequency control */
+    proc_create("adreno_bus_min_freq", 0664, NULL, &bus_min_freq_proc_ops);
+    proc_create("adreno_bus_max_freq", 0664, NULL, &bus_max_freq_proc_ops);
+
+    pr_info("Adreno bus frequency control initialized.\n");
+    return 0;
+}
+
+/* Cleanup the bus frequency controls */
+void adreno_freq_exit(void)
+{
+    /* Clean up /proc entries */
+    remove_proc_entry("adreno_bus_min_freq", NULL);
+    remove_proc_entry("adreno_bus_max_freq", NULL);
+
+    pr_info("Adreno bus frequency control cleaned up.\n");
+}
+
 
 static void adreno_pwr_on_work(struct work_struct *work);
 static unsigned int counter_delta(struct kgsl_device *device,
