@@ -680,12 +680,12 @@ F#include <dt-bindings/thermal/thermal.h>
 		trips {
 			active-config0 {
 				temperature = <125000>;
-				hysteresis = <1070>;
+				hysteresis = <1060>;
 				type = "passive";
 			};
 			active-config1 {
 				temperature = <115000>;
-				hysteresis = <1070>;
+				hysteresis = <1060>;
 				type = "passive";
 			};
 		};
@@ -698,7 +698,7 @@ F#include <dt-bindings/thermal/thermal.h>
 		wake-capable-sensor;
 		trips {
 			gpu_trip0: gpu-trip0 {
-				temperature = <98000>;
+				temperature = <99000>;
 				hysteresis = <0>;
 				type = "passive";
 			};
