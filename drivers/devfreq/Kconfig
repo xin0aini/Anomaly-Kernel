@@ -40,13 +40,14 @@ config DEVFREQ_GOV_SIMPLE_ONDEMAND
 	  values that imply the usage rate. A device may provide tuned
 	  values to the governor with data field at devfreq_add_device().
 
-config DEVFREQ_GOV_ANOMALY
-	tristate "Anomaly Governor"
-	help
-	  A sophisticated gaming GPU governor with features like load prediction,
-	  thermal throttling awareness, and refresh rate scaling for enhanced performance.
-	  This governor dynamically adjusts GPU frequencies to maintain a balance
-	  between performance and power efficiency, particularly optimized for gaming workloads. 
+config DEVFREQ_GOV_ECHELON
+    tristate "Echelon GPU Governor"
+    depends on PM_DEVFREQ
+    help
+      This governor is optimized for graphically intensive and FPS games,
+      providing responsive scaling and sustained performance for Adreno GPUs.
+      It dynamically adjusts GPU frequencies based on utilization and
+      temperature thresholds, ensuring smooth frame rates under heavy loads.
 
 config DEVFREQ_GOV_PERFORMANCE
 	tristate "Performance"
