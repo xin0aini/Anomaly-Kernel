@@ -15,15 +15,26 @@
 #include <linux/ktime.h>
 #include <linux/thermal.h>  /* For temperature-based scaling */
 #include <linux/sched/clock.h>
+#include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
+#include <dt-bindings/regulator/qcom,rpmh-regulator-levels.h>
+#include <dt-bindings/soc/qcom,rpmh-rsc.h>
+#include <dt-bindings/clock/qcom,gpucc-kona.h>
 #include "governor.h"
 
 /* Echelon: Gaming-optimized DevFreq Governor for Adreno 650 */
-#define ECHELON_UPTHRESHOLD       (85)  /* 85% load for scaling up */
+#define ECHELON_UPTHRESHOLD       (95)  /* 85% load for scaling up */
 #define ECHELON_DOWNTHRESHOLD     (30)  /* 30% load for scaling down */
 #define ECHELON_DOWNSCALE_FACTOR  (50)  /* Frequency reduction factor on idle */
 #define ECHELON_SCALE_TIMEOUT     (100) /* Timeout for scaling in ms */
-#define ECHELON_MAX_SCALE_STEP    (2)   /* Maximum step for scaling frequency */
+#define ECHELON_MAX_SCALE_STEP    (4)   /* Maximum step for scaling frequency */
 #define THERMAL_ZONE_NAME         "thermal_zone0" /* Assuming thermal zone0 */
+
+/* OPP Table */
+static const unsigned long gpu_opp_freqs[] = {
+    938000000, 835000000, 720000000, 640000000,
+    525000000, 490000000, 400000000, 305000000,
+    150000000
+};
 
 /* Data structure to hold Echelon governor settings */
 struct devfreq_echelon_data {
@@ -34,26 +45,36 @@ struct devfreq_echelon_data {
     ktime_t last_update_time; /* Time of last frequency update */
 };
 
+/* Helper function to find the closest OPP */
+static unsigned long find_closest_opp(unsigned long target_freq)
+{
+    unsigned long closest = gpu_opp_freqs[0];
+    int i;
+
+    for (i = 1; i < ARRAY_SIZE(gpu_opp_freqs); i++) {
+        if (abs(target_freq - gpu_opp_freqs[i]) < abs(target_freq - closest)) {
+            closest = gpu_opp_freqs[i];
+        }
+    }
+    return closest;
+}
+
 /* Frequency scaling function */
 static int devfreq_echelon_func(struct devfreq *df, unsigned long *freq)
 {
     int err;
     struct devfreq_dev_status *stat;
     struct devfreq_echelon_data *data = df->data;
-    unsigned long max = (df->max_freq) ? df->max_freq : UINT_MAX;
-    unsigned long min = (df->min_freq) ? df->min_freq : 0;
+    unsigned long max = (df->max_freq) ? df->max_freq : gpu_opp_freqs[0];
+    unsigned long min = (df->min_freq) ? df->min_freq : gpu_opp_freqs[ARRAY_SIZE(gpu_opp_freqs) - 1];
 
-    /* Declare variables at the start to comply with C90 */
     unsigned int upthreshold = ECHELON_UPTHRESHOLD;
     unsigned int downthreshold = ECHELON_DOWNTHRESHOLD;
     unsigned int downscale_factor = ECHELON_DOWNSCALE_FACTOR;
     unsigned int max_scale_step = ECHELON_MAX_SCALE_STEP;
     unsigned long predicted_frequency = *freq;
 
-    static bool scaling_up = false;
-    static bool scaling_down = false;
-    
-    struct thermal_zone_device *tz = NULL; /* Declare thermal zone device here */
+    struct thermal_zone_device *tz = NULL;
 
     err = devfreq_update_stats(df);
     if (err)
@@ -72,74 +93,36 @@ static int devfreq_echelon_func(struct devfreq *df, unsigned long *freq)
             max_scale_step = data->max_scale_step;
     }
 
-    /* Prevent overflow */
-    if (stat->busy_time >= (1 << 24) || stat->total_time >= (1 << 24)) {
-        stat->busy_time >>= 7;
-        stat->total_time >>= 7;
-    }
-
-    /* Handle GPU load scaling */
     if (stat->total_time == 0) {
         *freq = max;
         return 0;
     }
 
-    /* Proactive Scaling: Preemptively adjust frequency based on increasing load */
     if (stat->busy_time * 100 > stat->total_time * upthreshold) {
-        predicted_frequency = max; // Scale up if load is high
+        predicted_frequency = max;
     } else if (stat->busy_time * 100 < stat->total_time * downthreshold) {
-        predicted_frequency = min + downscale_factor; // Scale down for idle
+        predicted_frequency = min;
     }
+
+    predicted_frequency = find_closest_opp(predicted_frequency);
 
     if (predicted_frequency != *freq) {
         *freq = predicted_frequency;
     }
 
-    /* Apply hysteresis to prevent oscillations */
-    if (scaling_up && *freq != max) {
-        scaling_up = false;
-    }
-    if (scaling_down && *freq != min) {
-        scaling_down = false;
-    }
-
-    if (stat->busy_time * 100 > stat->total_time * upthreshold && !scaling_up) {
-        *freq = max;
-        scaling_up = true;
-    } else if (stat->busy_time * 100 < stat->total_time * downthreshold && !scaling_down) {
-        *freq = min + downscale_factor;
-        scaling_down = true;
-    }
-
-    /* Keep the frequency within min/max bounds */
     if (*freq < min)
         *freq = min;
     if (*freq > max)
         *freq = max;
 
-    /* Apply step-based scaling for smooth frequency changes */
-    if (stat->current_frequency > *freq + max_scale_step) {
-        *freq = stat->current_frequency - max_scale_step;
-    } else if (stat->current_frequency < *freq - max_scale_step) {
-        *freq = stat->current_frequency + max_scale_step;
-    }
-
-    /* Thermal management: Integrate cooling-based frequency scaling */
     tz = thermal_zone_get_zone_by_name(THERMAL_ZONE_NAME);
     if (!IS_ERR(tz)) {
         int temp;
         err = thermal_zone_get_temp(tz, &temp);
-        if (err == 0) {
-            /* Scale down frequency if temperature exceeds 80°C */
-            if (temp > 80000) { /* 80°C */
-                *freq = min;
-            }
+        if (err == 0 && temp > 95000) {
+            *freq = min;
         }
     }
-
-    /* Logging and diagnostic support (optional, can be enabled for debugging) */
-    pr_debug("Echelon Governor: Load: %lu%%, Current Freq: %lu, Predicted Freq: %lu\n", 
-             stat->busy_time * 100 / stat->total_time, stat->current_frequency, *freq);
 
     return 0;
 }
@@ -195,8 +178,6 @@ static void __exit devfreq_echelon_exit(void)
     ret = devfreq_remove_governor(&devfreq_echelon);
     if (ret)
         pr_err("%s: failed remove governor %d\n", __func__, ret);
-
-    return;
 }
 module_exit(devfreq_echelon_exit);
 
