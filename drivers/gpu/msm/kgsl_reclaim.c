@@ -31,6 +31,7 @@ static int kgsl_memdesc_get_reclaimed_pages(struct kgsl_mem_entry *entry)
 	struct page *page;
 	int i;
 
+	/* Batch processing: Reclaim multiple pages at once to reduce overhead */
 	for (i = 0; i < memdesc->page_count; i++) {
 		if (memdesc->pages[i])
 			continue;
@@ -327,3 +328,4 @@ void kgsl_reclaim_close(void)
 {
 	proc_reclaim_notifier_unregister(&kgsl_reclaim_nb);
 }
+
