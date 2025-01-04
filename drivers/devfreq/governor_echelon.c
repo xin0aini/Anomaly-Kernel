@@ -26,7 +26,6 @@
 #define ECHELON_DOWNTHRESHOLD     (30)  /* 30% load for scaling down */
 #define ECHELON_DOWNSCALE_FACTOR  (50)  /* Frequency reduction factor on idle */
 #define ECHELON_SCALE_TIMEOUT     (100) /* Timeout for scaling in ms */
-#define ECHELON_MAX_SCALE_STEP    (4)   /* Maximum step for scaling frequency */
 #define THERMAL_ZONE_NAME         "thermal_zone0" /* Assuming thermal zone0 */
 
 /* OPP Table */
@@ -41,7 +40,6 @@ struct devfreq_echelon_data {
     unsigned int upthreshold;
     unsigned int downthreshold;
     unsigned int downscale_factor;
-    unsigned int max_scale_step;
     ktime_t last_update_time; /* Time of last frequency update */
 };
 
@@ -57,74 +55,6 @@ static unsigned long find_closest_opp(unsigned long target_freq)
         }
     }
     return closest;
-}
-
-/* Frequency scaling function */
-static int devfreq_echelon_func(struct devfreq *df, unsigned long *freq)
-{
-    int err;
-    struct devfreq_dev_status *stat;
-    struct devfreq_echelon_data *data = df->data;
-    unsigned long max = (df->max_freq) ? df->max_freq : gpu_opp_freqs[0];
-    unsigned long min = (df->min_freq) ? df->min_freq : gpu_opp_freqs[ARRAY_SIZE(gpu_opp_freqs) - 1];
-
-    unsigned int upthreshold = ECHELON_UPTHRESHOLD;
-    unsigned int downthreshold = ECHELON_DOWNTHRESHOLD;
-    unsigned int downscale_factor = ECHELON_DOWNSCALE_FACTOR;
-    unsigned int max_scale_step = ECHELON_MAX_SCALE_STEP;
-    unsigned long predicted_frequency = *freq;
-
-    struct thermal_zone_device *tz = NULL;
-
-    err = devfreq_update_stats(df);
-    if (err)
-        return err;
-
-    stat = &df->last_status;
-
-    if (data) {
-        if (data->upthreshold)
-            upthreshold = data->upthreshold;
-        if (data->downthreshold)
-            downthreshold = data->downthreshold;
-        if (data->downscale_factor)
-            downscale_factor = data->downscale_factor;
-        if (data->max_scale_step)
-            max_scale_step = data->max_scale_step;
-    }
-
-    if (stat->total_time == 0) {
-        *freq = max;
-        return 0;
-    }
-
-    if (stat->busy_time * 100 > stat->total_time * upthreshold) {
-        predicted_frequency = max;
-    } else if (stat->busy_time * 100 < stat->total_time * downthreshold) {
-        predicted_frequency = min;
-    }
-
-    predicted_frequency = find_closest_opp(predicted_frequency);
-
-    if (predicted_frequency != *freq) {
-        *freq = predicted_frequency;
-    }
-
-    if (*freq < min)
-        *freq = min;
-    if (*freq > max)
-        *freq = max;
-
-    tz = thermal_zone_get_zone_by_name(THERMAL_ZONE_NAME);
-    if (!IS_ERR(tz)) {
-        int temp;
-        err = thermal_zone_get_temp(tz, &temp);
-        if (err == 0 && temp > 95000) {
-            *freq = min;
-        }
-    }
-
-    return 0;
 }
 
 /* Event handler for Echelon governor */
@@ -159,9 +89,99 @@ static int devfreq_echelon_handler(struct devfreq *devfreq,
     return 0;
 }
 
+/* Simple Moving Average (SMA) for Load Prediction */
+#define MOVING_AVERAGE_WINDOW 10
+static unsigned long load_history[MOVING_AVERAGE_WINDOW];
+static int load_history_index = 0;
+
+unsigned long compute_moving_average(void)
+{
+    unsigned long sum = 0;
+    int i;  // Declared outside of the loop for compatibility with older GCC versions
+
+    for (i = 0; i < MOVING_AVERAGE_WINDOW; i++) {
+        sum += load_history[i];
+    }
+    return sum / MOVING_AVERAGE_WINDOW;
+}
+
+void update_load_history(unsigned long new_load)
+{
+    load_history[load_history_index] = new_load;
+    load_history_index = (load_history_index + 1) % MOVING_AVERAGE_WINDOW;
+}
+
+/* Frequency scaling with prediction */
+static int devfreq_echelon_func_with_prediction(struct devfreq *df, unsigned long *freq)
+{
+    int err;
+    struct devfreq_dev_status *stat;
+    struct devfreq_echelon_data *data = df->data;
+    unsigned long max = (df->max_freq) ? df->max_freq : gpu_opp_freqs[0];
+    unsigned long min = (df->min_freq) ? df->min_freq : gpu_opp_freqs[ARRAY_SIZE(gpu_opp_freqs) - 1];
+
+    unsigned int upthreshold = ECHELON_UPTHRESHOLD;
+    unsigned int downthreshold = ECHELON_DOWNTHRESHOLD;
+    unsigned int downscale_factor = ECHELON_DOWNSCALE_FACTOR;
+    unsigned long predicted_frequency = *freq;
+
+    struct thermal_zone_device *tz = NULL;
+
+    err = devfreq_update_stats(df);
+    if (err)
+        return err;
+
+    stat = &df->last_status;
+
+    if (data) {
+        if (data->upthreshold)
+            upthreshold = data->upthreshold;
+        if (data->downthreshold)
+            downthreshold = data->downthreshold;
+        if (data->downscale_factor)
+            downscale_factor = data->downscale_factor;
+    }
+
+    if (stat->total_time == 0) {
+        *freq = max;
+        return 0;
+    }
+
+    if (stat->busy_time * 100 > stat->total_time * upthreshold) {
+        predicted_frequency = max;
+    } else if (stat->busy_time * 100 < stat->total_time * downthreshold) {
+        predicted_frequency = min;
+    }
+
+    update_load_history(stat->busy_time * 100 / stat->total_time);
+    predicted_frequency = compute_moving_average();
+
+    predicted_frequency = find_closest_opp(predicted_frequency);
+
+    if (predicted_frequency != *freq) {
+        *freq = predicted_frequency;
+    }
+
+    if (*freq < min)
+        *freq = min;
+    if (*freq > max)
+        *freq = max;
+
+    tz = thermal_zone_get_zone_by_name(THERMAL_ZONE_NAME);
+    if (!IS_ERR(tz)) {
+        int temp;
+        err = thermal_zone_get_temp(tz, &temp);
+        if (err == 0 && temp > 95000) {
+            *freq = min;
+        }
+    }
+
+    return 0;
+}
+
 static struct devfreq_governor devfreq_echelon = {
     .name = "Echelon",
-    .get_target_freq = devfreq_echelon_func,
+    .get_target_freq = devfreq_echelon_func_with_prediction,
     .event_handler = devfreq_echelon_handler,
 };
 
