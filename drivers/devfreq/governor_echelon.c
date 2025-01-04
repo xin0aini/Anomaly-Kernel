@@ -22,7 +22,7 @@
 #include "governor.h"
 
 /* Echelon: Gaming-optimized DevFreq Governor for Adreno 650 */
-#define ECHELON_UPTHRESHOLD       (95)  /* 85% load for scaling up */
+#define ECHELON_UPTHRESHOLD       (80)  /* 80% load for scaling up */
 #define ECHELON_DOWNTHRESHOLD     (30)  /* 30% load for scaling down */
 #define ECHELON_DOWNSCALE_FACTOR  (50)  /* Frequency reduction factor on idle */
 #define ECHELON_SCALE_TIMEOUT     (100) /* Timeout for scaling in ms */
