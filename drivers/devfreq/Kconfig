@@ -39,6 +39,15 @@ config DEVFREQ_GOV_SIMPLE_ONDEMAND
 	  Simple-Ondemand should be able to provide busy/total counter
 	  values that imply the usage rate. A device may provide tuned
 	  values to the governor with data field at devfreq_add_device().
+	  
+config DEVFREQ_GOV_ECHELON
+    tristate "Echelon GPU Governor"
+    depends on PM_DEVFREQ
+    help
+      This governor is optimized for graphically intensive and FPS games,
+      providing responsive scaling and sustained performance for Adreno GPUs.
+      It dynamically adjusts GPU frequencies based on utilization and
+      temperature thresholds, ensuring smooth frame rates under heavy loads.	  
 
 config DEVFREQ_GOV_PERFORMANCE
 	tristate "Performance"
@@ -131,14 +140,6 @@ config DEVFREQ_GOV_CDSPL3
 
 comment "DEVFREQ Drivers"
 
-config DEVFREQ_GOV_QCOM_ADRENO_TZ
-	tristate "Qualcomm Technologies Inc Adreno Trustzone"
-	depends on QCOM_KGSL
-	help
-	   Trustzone based governor for the Adreno GPU. Sets
-	   the frequency using a "on-demand" algorithm. This
-	   governor is unlikely to be useful for other
-	   devices.
 
 config DEVFREQ_GOV_QCOM_GPUBW_MON
 	tristate "GPU BW voting governor"
