@@ -32,13 +32,13 @@
 
 /* Define GPU frequency values (in MHz) */
 static const unsigned long adreno_supported_freqs[] = {
-    200, 350, 500, 700, 900  // Frequency values for the GPU
+    200, 350, 500, 700, 800  // Frequency values for the GPU
 };
 
 /* Define Adreno power scaling data */
 static struct devfreq_msm_adreno_tz_data adreno_tz_data = {
     .bus = {
-        .max = 900,       // Default maximum bus frequency
+        .max = 800,       // Default maximum bus frequency
         .floating = true, // Bus frequency floating behavior
     },
     .device_id = KGSL_DEVICE_3D0,  // Device ID for the GPU
@@ -50,7 +50,7 @@ static struct adreno_bus_freq_status {
     unsigned int bus_max;
 } adreno_bus_freq_status = {
     .bus_min = 200,  // Default min bus frequency (MHz)
-    .bus_max = 900,  // Default max bus frequency (MHz)
+    .bus_max = 800,  // Default max bus frequency (MHz)
 };
 
 /* Function to handle setting the bus min frequency */
@@ -61,7 +61,7 @@ static ssize_t set_bus_min_freq(struct file *file, const char __user *buf,
     int ret;
 
     ret = kstrtouint_from_user(buf, count, 10, &val);
-    if (ret || val < 200 || val > 900)  // Validate frequency range
+    if (ret || val < 200 || val > 800)  // Validate frequency range
         return -EINVAL;
 
     adreno_bus_freq_status.bus_min = val;
@@ -82,7 +82,7 @@ static ssize_t set_bus_max_freq(struct file *file, const char __user *buf,
     int ret;
 
     ret = kstrtouint_from_user(buf, count, 10, &val);
-    if (ret || val < 200 || val > 900)  // Validate frequency range
+    if (ret || val < 200 || val > 800)  // Validate frequency range
         return -EINVAL;
 
     adreno_bus_freq_status.bus_max = val;

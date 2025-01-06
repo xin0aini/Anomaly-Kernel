@@ -22,7 +22,7 @@
 #include "governor.h"
 
 /* Echelon: Gaming-optimized DevFreq Governor for Adreno 650 */
-#define ECHELON_UPTHRESHOLD       (80)  /* 80% load for scaling up */
+#define ECHELON_UPTHRESHOLD       (75)  /* 75% load for scaling up */
 #define ECHELON_DOWNTHRESHOLD     (30)  /* 30% load for scaling down */
 #define ECHELON_DOWNSCALE_FACTOR  (50)  /* Frequency reduction factor on idle */
 #define ECHELON_SCALE_TIMEOUT     (100) /* Timeout for scaling in ms */
@@ -40,6 +40,7 @@ struct devfreq_echelon_data {
     unsigned int upthreshold;
     unsigned int downthreshold;
     unsigned int downscale_factor;
+    unsigned int max_scale_step;
     ktime_t last_update_time; /* Time of last frequency update */
 };
 
@@ -57,62 +58,8 @@ static unsigned long find_closest_opp(unsigned long target_freq)
     return closest;
 }
 
-/* Event handler for Echelon governor */
-static int devfreq_echelon_handler(struct devfreq *devfreq,
-                                   unsigned int event, void *data)
-{
-    switch (event) {
-    case DEVFREQ_GOV_START:
-        devfreq_monitor_start(devfreq);
-        break;
-
-    case DEVFREQ_GOV_STOP:
-        devfreq_monitor_stop(devfreq);
-        break;
-
-    case DEVFREQ_GOV_INTERVAL:
-        devfreq_interval_update(devfreq, (unsigned int *)data);
-        break;
-
-    case DEVFREQ_GOV_SUSPEND:
-        devfreq_monitor_suspend(devfreq);
-        break;
-
-    case DEVFREQ_GOV_RESUME:
-        devfreq_monitor_resume(devfreq);
-        break;
-
-    default:
-        break;
-    }
-
-    return 0;
-}
-
-/* Simple Moving Average (SMA) for Load Prediction */
-#define MOVING_AVERAGE_WINDOW 10
-static unsigned long load_history[MOVING_AVERAGE_WINDOW];
-static int load_history_index = 0;
-
-unsigned long compute_moving_average(void)
-{
-    unsigned long sum = 0;
-    int i;  // Declared outside of the loop for compatibility with older GCC versions
-
-    for (i = 0; i < MOVING_AVERAGE_WINDOW; i++) {
-        sum += load_history[i];
-    }
-    return sum / MOVING_AVERAGE_WINDOW;
-}
-
-void update_load_history(unsigned long new_load)
-{
-    load_history[load_history_index] = new_load;
-    load_history_index = (load_history_index + 1) % MOVING_AVERAGE_WINDOW;
-}
-
-/* Frequency scaling with prediction */
-static int devfreq_echelon_func_with_prediction(struct devfreq *df, unsigned long *freq)
+/* Frequency scaling function */
+static int devfreq_echelon_func(struct devfreq *df, unsigned long *freq)
 {
     int err;
     struct devfreq_dev_status *stat;
@@ -153,9 +100,6 @@ static int devfreq_echelon_func_with_prediction(struct devfreq *df, unsigned lon
         predicted_frequency = min;
     }
 
-    update_load_history(stat->busy_time * 100 / stat->total_time);
-    predicted_frequency = compute_moving_average();
-
     predicted_frequency = find_closest_opp(predicted_frequency);
 
     if (predicted_frequency != *freq) {
@@ -179,9 +123,41 @@ static int devfreq_echelon_func_with_prediction(struct devfreq *df, unsigned lon
     return 0;
 }
 
+/* Event handler for Echelon governor */
+static int devfreq_echelon_handler(struct devfreq *devfreq,
+                                   unsigned int event, void *data)
+{
+    switch (event) {
+    case DEVFREQ_GOV_START:
+        devfreq_monitor_start(devfreq);
+        break;
+
+    case DEVFREQ_GOV_STOP:
+        devfreq_monitor_stop(devfreq);
+        break;
+
+    case DEVFREQ_GOV_INTERVAL:
+        devfreq_interval_update(devfreq, (unsigned int *)data);
+        break;
+
+    case DEVFREQ_GOV_SUSPEND:
+        devfreq_monitor_suspend(devfreq);
+        break;
+
+    case DEVFREQ_GOV_RESUME:
+        devfreq_monitor_resume(devfreq);
+        break;
+
+    default:
+        break;
+    }
+
+    return 0;
+}
+
 static struct devfreq_governor devfreq_echelon = {
     .name = "Echelon",
-    .get_target_freq = devfreq_echelon_func_with_prediction,
+    .get_target_freq = devfreq_echelon_func,
     .event_handler = devfreq_echelon_handler,
 };
 
