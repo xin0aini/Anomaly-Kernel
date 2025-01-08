@@ -180,4 +180,3 @@ module_exit(devfreq_echelon_exit);
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("The_Anomalist");
 MODULE_DESCRIPTION("Echelon: A high-performance devfreq governor for Adreno 650 GPU, optimized for gaming.");
-
