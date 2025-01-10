@@ -284,6 +284,7 @@ static const struct freq_tbl ftbl_npu_cc_cal_hm0_clk_src[] = {
 	F(533000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
 	F(850000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
 	F(1000000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
+	F(1100000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
 	{ }
 };
 
@@ -294,6 +295,7 @@ static const struct freq_tbl ftbl_npu_cc_cal_hm0_clk_src_kona_v2[] = {
 	F(730000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
 	F(920000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
 	F(1000000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
+	F(1100000000, P_NPU_CC_CRC_DIV, 1, 0, 0),
 	{ }
 };
 
@@ -318,7 +320,7 @@ static struct clk_rcg2 npu_cc_cal_hm1_clk_src = {
 			[VDD_LOW] = 466000000,
 			[VDD_LOW_L1] = 533000000,
 			[VDD_NOMINAL] = 850000000,
-			[VDD_HIGH] = 1000000000},
+			[VDD_HIGH] = 1100000000},
 	},
 };
 
@@ -344,7 +346,7 @@ static struct clk_rcg2 npu_cc_cal_hm0_clk_src = {
 				[VDD_LOW] = 466000000,
 				[VDD_LOW_L1] = 533000000,
 				[VDD_NOMINAL] = 850000000,
-				[VDD_HIGH] = 1000000000},
+				[VDD_HIGH] = 1100000000},
 		},
 		.dependent_hw = &npu_cc_cal_hm1_clk_src.clkr.hw,
 	},
