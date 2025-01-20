@@ -38,7 +38,7 @@ static const unsigned long adreno_supported_freqs[] = {
 static struct devfreq_msm_adreno_tz_data adreno_tz_data = {
     .bus = {
         .max = 900,       // Default maximum bus frequency
-        .floating = true, // Bus frequency floating behavior
+        .floating = false, // Bus frequency floating behavior
     },
     .device_id = KGSL_DEVICE_3D0,  // Device ID for the GPU
 };
